@@ -12,6 +12,7 @@ const cleanerAdmins = new Set((config.CLEANER_ADMINS || '').split(',').map(id =>
 const deleteDelayMs = config.messageDeleteDelaySeconds * 1000;
 const searchDelayMs = config.messageSearchDelaySeconds * 1000;
 const botStatus = config.botStatus || 'online';
+const botStatusText = config.botStatusText || '';
 if (!['online', 'idle', 'dnd', 'invisible'].includes(botStatus)) throw new Error('botStatus must be online, idle, dnd, or invisible');
 
 const dataDir = process.env.DATA_DIR || '.';
@@ -40,6 +41,7 @@ let nextCleanId = 0;
 client.once('ready', async () => {
   await new REST({ version: '10' }).setToken(token).put(Routes.applicationCommands(appId), { body: commands });
   await client.user.setStatus(botStatus);
+  if (botStatusText) await client.user.setActivity(botStatusText);
   LOGGER.info(`Ready as ${client.user.tag}`);
   setInterval(() => sweep().catch(error => LOGGER.error('Scheduled sweep failed', error)), 12 * 60 * 60_000);
   sweep().catch(error => LOGGER.error('Startup sweep failed', error));
