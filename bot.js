@@ -10,6 +10,7 @@ const appId = config.DISCORD_CLIENT_ID;
 if (!token || !appId) throw new Error('Set DISCORD_TOKEN and DISCORD_CLIENT_ID in config.json');
 const cleanerAdmins = new Set((config.CLEANER_ADMINS || '').split(',').map(id => id.trim()).filter(Boolean));
 const deleteDelayMs = config.messageDeleteDelaySeconds * 1000;
+const searchDelayMs = config.messageSearchDelaySeconds * 1000;
 
 const dataDir = process.env.DATA_DIR || '.';
 mkdirSync(dataDir, { recursive: true });
@@ -115,7 +116,7 @@ client.on('interactionCreate', async i => {
 async function searchMessages(guildId, authors, bounds, logger) {
   const query = new URLSearchParams({ ...bounds, sort_by: 'timestamp', sort_order: 'asc', limit: '25' });
   for (const author of authors) query.append('author_id', author);
-  const wait = 5000 - (Date.now() - lastSearchAt);
+  const wait = searchDelayMs - (Date.now() - lastSearchAt);
   if (lastSearchAt && wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
   lastSearchAt = Date.now();
   logger.trace('Message-search request details', { authorIds: authors, bounds });

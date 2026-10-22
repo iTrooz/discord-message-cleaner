@@ -2,5 +2,6 @@
   "DISCORD_TOKEN": "",
   "DISCORD_CLIENT_ID": "",
   "CLEANER_ADMINS": "",
+  "messageSearchDelaySeconds": 5,
   "messageDeleteDelaySeconds": 4
 }
