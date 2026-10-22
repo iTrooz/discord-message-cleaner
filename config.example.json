@@ -2,6 +2,7 @@
   "DISCORD_TOKEN": "",
   "DISCORD_CLIENT_ID": "",
   "CLEANER_ADMINS": "",
+  "botStatus": "online",
   "messageSearchDelaySeconds": 5,
   "messageDeleteDelaySeconds": 4
 }

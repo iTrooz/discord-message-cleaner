@@ -11,6 +11,8 @@ if (!token || !appId) throw new Error('Set DISCORD_TOKEN and DISCORD_CLIENT_ID i
 const cleanerAdmins = new Set((config.CLEANER_ADMINS || '').split(',').map(id => id.trim()).filter(Boolean));
 const deleteDelayMs = config.messageDeleteDelaySeconds * 1000;
 const searchDelayMs = config.messageSearchDelaySeconds * 1000;
+const botStatus = config.botStatus || 'online';
+if (!['online', 'idle', 'dnd', 'invisible'].includes(botStatus)) throw new Error('botStatus must be online, idle, dnd, or invisible');
 
 const dataDir = process.env.DATA_DIR || '.';
 mkdirSync(dataDir, { recursive: true });
@@ -37,6 +39,7 @@ let lastSearchAt = 0;
 let nextCleanId = 0;
 client.once('ready', async () => {
   await new REST({ version: '10' }).setToken(token).put(Routes.applicationCommands(appId), { body: commands });
+  await client.user.setStatus(botStatus);
   LOGGER.info(`Ready as ${client.user.tag}`);
   setInterval(() => sweep().catch(error => LOGGER.error('Scheduled sweep failed', error)), 12 * 60 * 60_000);
   sweep().catch(error => LOGGER.error('Startup sweep failed', error));
