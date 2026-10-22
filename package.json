@@ -1,0 +1,13 @@
+{
+  "name": "discord-message-cleaner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "tslog": "^5.4.0"
+  }
+}

@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: discordbot-cleaner
+    read_only: true
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - app-data:/app/data
+    environment:
+      DATA_DIR: /app/data
+
+volumes:
+  app-data:
