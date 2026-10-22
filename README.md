@@ -1,12 +1,18 @@
 # Discord message cleaner
 
-Requires Node.js 22+ and a Discord application/bot with **Manage Messages** and **Read Message History** permissions. Enable the **Message Content** privileged intent for the guild message-search endpoint.
+A discord bot to remove user messages from servers. Features:
+- Player have to explicitely register themselves to be cleaned up
+- Ability to exclude channels from cleanup
+- Some metrics
+- Prefers deleting messages less than 14 days old using the bulk deletion API, but can fall back to manually deleting every message
 
-```sh
-npm install
-DISCORD_TOKEN=... DISCORD_CLIENT_ID=... npm start
-```
+Commands: `/cleanup register`, `/cleanup unregister`, `/cleanup status`, `/cleanup server status`, `/cleanup server include`, `/cleanup server exclude`.
 
-Invite the bot with `bot` and `applications.commands` scopes. The bot registers global slash commands on startup. It runs a search sweep at startup and every 12 hours, deleting registered users' messages between 11 and 14 days old. Search results are subject to Discord indexing and pagination limits.
+# Usage
+- Copy config.example.json to config.json and edit
+- `docker compose up -d`
+- That' it !
 
-Commands: `/cleanup register`, `/cleanup unregister`, `/cleanup status`, `/cleanup metrics`, and `/cleanup server status`. Metrics show the invoking user's deleted-message totals for this server and across all servers. Responses are ephemeral. Registrations and metrics persist in `registrations.json`.
+# Licence
+
+[GPL-2.0-only OR GPL-3.0-or-later with proxy being me (iTrooz)](https://itrooz.fr/posts/gpl_licence/)
