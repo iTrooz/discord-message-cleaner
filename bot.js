@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, MessageFlags, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import { LOGGER } from './logger.js';
 
 // Load registrations from local persistent storage.
@@ -52,21 +52,21 @@ client.on('interactionCreate', async i => {
   const sub = i.options.getSubcommand();
   const group = i.options.getSubcommandGroup();
   const user = i.user.id, guild = i.guildId;
-  if (!guild) return i.reply({ content: 'Use this command in a server.', ephemeral: true });
-  if (group === 'server' && !cleanerAdmins.has(user)) return i.reply({ content: 'Only configured cleanup admins can use server commands.', ephemeral: true });
+  if (!guild) return i.reply({ content: 'Use this command in a server.', flags: MessageFlags.Ephemeral });
+  if (group === 'server' && !cleanerAdmins.has(user)) return i.reply({ content: 'Only configured cleanup admins can use server commands.', flags: MessageFlags.Ephemeral });
   if (!group && sub === 'run') {
-    if (!cleanerAdmins.has(user)) return i.reply({ content: 'Only configured cleanup admins can run cleanup.', ephemeral: true });
-    if (sweeping) return i.reply({ content: 'A cleanup sweep is already running.', ephemeral: true });
+    if (!cleanerAdmins.has(user)) return i.reply({ content: 'Only configured cleanup admins can run cleanup.', flags: MessageFlags.Ephemeral });
+    if (sweeping) return i.reply({ content: 'A cleanup sweep is already running.', flags: MessageFlags.Ephemeral });
     const includeOlder = i.options.getBoolean('older-than-14-days') || false;
     const run = sweep({ includeOlder });
-    await i.reply({ content: `Cleanup sweep started${includeOlder ? ', including messages older than 14 days' : ''}.`, ephemeral: true });
+    await i.reply({ content: `Cleanup sweep started${includeOlder ? ', including messages older than 14 days' : ''}.`, flags: MessageFlags.Ephemeral });
     run.then(async count => {
       const message = `Cleanup sweep finished. Deleted ${count} messages.`;
-      try { await i.followUp({ content: message, ephemeral: true }); }
+      try { await i.followUp({ content: message, flags: MessageFlags.Ephemeral }); }
       catch { await i.user.send(message).catch(error => LOGGER.error('Could not send completion DM', error)); }
     }).catch(async error => {
       LOGGER.error('Manual sweep failed', error);
-      try { await i.followUp({ content: 'Cleanup sweep failed. Check the bot logs.', ephemeral: true }); }
+      try { await i.followUp({ content: 'Cleanup sweep failed. Check the bot logs.', flags: MessageFlags.Ephemeral }); }
       catch { await i.user.send('Cleanup sweep failed. Check the bot logs.').catch(dmError => LOGGER.error('Could not send failure DM', dmError)); }
     });
     return;
@@ -76,12 +76,12 @@ client.on('interactionCreate', async i => {
     if (scope === 'global') {
       const has = data.global.includes(user);
       data.global = sub === 'register' ? [...new Set([...data.global, user])] : data.global.filter(id => id !== user);
-      await i.reply({ content: sub === 'register' ? 'Global registration saved.' : has ? 'Global registration removed.' : 'You were not registered globally.', ephemeral: true });
+      await i.reply({ content: sub === 'register' ? 'Global registration saved.' : has ? 'Global registration removed.' : 'You were not registered globally.', flags: MessageFlags.Ephemeral });
     } else {
       data.local[guild] ??= [];
       const has = data.local[guild].includes(user);
       data.local[guild] = sub === 'register' ? [...new Set([...data.local[guild], user])] : data.local[guild].filter(id => id !== user);
-      await i.reply({ content: sub === 'register' ? 'Server registration saved.' : has ? 'Server registration removed.' : 'You were not registered here.', ephemeral: true });
+      await i.reply({ content: sub === 'register' ? 'Server registration saved.' : has ? 'Server registration removed.' : 'You were not registered here.', flags: MessageFlags.Ephemeral });
     }
     save();
     return;
@@ -90,19 +90,19 @@ client.on('interactionCreate', async i => {
     const scopes = [data.local[guild]?.includes(user) && 'this server', data.global.includes(user) && 'all servers'].filter(Boolean);
     const counts = data.metrics[user] || { global: 0, guilds: {} };
     const registration = scopes.length ? `Registered for: ${scopes.join(' and ')}.` : 'You have no active registrations.';
-    return i.reply({ content: `${registration}\nDeleted messages — this server: ${counts.guilds?.[guild] || 0}; all servers: ${counts.global || 0}.`, ephemeral: true });
+    return i.reply({ content: `${registration}\nDeleted messages — this server: ${counts.guilds?.[guild] || 0}; all servers: ${counts.global || 0}.`, flags: MessageFlags.Ephemeral });
   }
   if (group !== 'server') return;
   if (sub === 'exclude' || sub === 'include') {
     const channel = i.options.getChannel('channel');
-    if (channel.guildId !== guild) return i.reply({ content: 'Choose a channel from this server.', ephemeral: true });
+    if (channel.guildId !== guild) return i.reply({ content: 'Choose a channel from this server.', flags: MessageFlags.Ephemeral });
     data.excluded[guild] ??= [];
     const wasExcluded = data.excluded[guild].includes(channel.id);
     data.excluded[guild] = sub === 'exclude'
       ? [...new Set([...data.excluded[guild], channel.id])]
       : data.excluded[guild].filter(id => id !== channel.id);
     save();
-    return i.reply({ content: sub === 'exclude' ? `<#${channel.id}> is excluded from cleanup.` : wasExcluded ? `<#${channel.id}> is included in cleanup.` : `<#${channel.id}> was already included.`, ephemeral: true });
+    return i.reply({ content: sub === 'exclude' ? `<#${channel.id}> is excluded from cleanup.` : wasExcluded ? `<#${channel.id}> is included in cleanup.` : `<#${channel.id}> was already included.`, flags: MessageFlags.Ephemeral });
   }
   const ids = [...new Set([...(data.local[guild] || []), ...data.global])];
   const deleted = Object.values(data.metrics).reduce((sum, counts) => sum + (counts.guilds?.[guild] || 0), 0);
@@ -114,7 +114,7 @@ client.on('interactionCreate', async i => {
     `Messages deleted across all servers: ${deletedGlobal}.`,
     `Excluded channels (${excluded.length}): ${excluded.length ? excluded.map(id => `<#${id}>`).join(', ') : 'None.'}`
   ].join('\n');
-  return i.reply({ content: status.length <= 2000 ? status : `${status.slice(0, 1990)}…`, ephemeral: true });
+  return i.reply({ content: status.length <= 2000 ? status : `${status.slice(0, 1990)}…`, flags: MessageFlags.Ephemeral });
 });
 
 // Search a guild for messages by the specified registered authors.
