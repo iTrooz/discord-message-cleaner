@@ -146,7 +146,7 @@ async function ensureThreadUnarchived(channelId, checkedThreads, archivedThreads
   if (checkedThreads.has(channelId)) return;
   const channel = await client.channels.fetch(channelId);
   if (channel?.isThread() && channel.archived) {
-    logger.info(`Unarchiving thread ${channelId} before deletion.`);
+    logger.debug(`Unarchiving thread ${channelId} before deletion.`);
     await channel.setArchived(false, 'Cleanup registered messages');
     archivedThreads.set(channelId, channel);
   }
@@ -169,7 +169,7 @@ async function sweep({ includeOlder = false } = {}) {
   const upper = BigInt(Math.floor((now - 11 * 864e5 - 1420070400000) * 4194304));
   let lastOldDeletion = 0;
   for (const guild of client.guilds.cache.values()) {
-    logger.info(`Server ID: ${guild.id}`);
+    logger.debug(`Server ID: ${guild.id}`);
     const users = [...new Set([...(data.local[guild.id] || []), ...data.global])];
     const excluded = new Set(data.excluded[guild.id] || []);
     for (let start = 0; start < users.length; start += 100) {
@@ -183,13 +183,13 @@ async function sweep({ includeOlder = false } = {}) {
         const found = page.filter(message => BigInt(message.id) >= lower && BigInt(message.id) <= upper && !excluded.has(message.channel_id));
         const counts = Object.groupBy(found, message => message.author.id);
         for (const author of authors) logger.debug(`User ${author} has ${counts[author]?.length || 0} eligible result(s) on this page.`);
-        logger.info(`${found.length} result(s) remain after channel exclusions.`);
+        logger.debug(`${found.length} result(s) remain after channel exclusions.`);
         for (const [channel, group] of Object.entries(Object.groupBy(found, message => message.channel_id))) {
           const byId = new Map(group.map(message => [message.id, message.author.id]));
           const eligible = [...byId.keys()];
           for (let n = 0; n < eligible.length; n += 100) {
             const batch = eligible.slice(n, n + 100);
-            logger.info(`Deleting ${batch.length} message(s) from channel ${channel}.`);
+            logger.debug(`Deleting ${batch.length} message(s) from channel ${channel}.`);
             await ensureThreadUnarchived(channel, checkedThreads, archivedThreads, logger);
             if (batch.length === 1) await client.rest.delete(Routes.channelMessage(channel, batch[0]));
             else if (batch.length > 1) await client.rest.post(Routes.channelBulkDelete(channel), { body: { messages: batch } });
@@ -199,7 +199,7 @@ async function sweep({ includeOlder = false } = {}) {
               sweepDeletions.set(author, (sweepDeletions.get(author) || 0) + 1);
             }
             deletedCount += batch.length;
-            logger.info(`Deleted ${batch.length} message(s) from channel ${channel}.`);
+            logger.debug(`Deleted ${batch.length} message(s) from channel ${channel}.`);
           }
         }
         cursor = newestId + 1n;
@@ -213,7 +213,7 @@ async function sweep({ includeOlder = false } = {}) {
           if (!page.length) break;
           const newestId = page.reduce((max, message) => BigInt(message.id) > max ? BigInt(message.id) : max, 0n);
           const old = page.filter(message => BigInt(message.id) < lower && !excluded.has(message.channel_id));
-          logger.info(`Found ${old.length} older message(s) on this page.`);
+          logger.debug(`Found ${old.length} older message(s) on this page.`);
           for (const message of old) {
             const wait = deleteDelayMs - (Date.now() - lastOldDeletion);
             if (lastOldDeletion && wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
@@ -225,7 +225,7 @@ async function sweep({ includeOlder = false } = {}) {
               sweepDeletions.set(message.author.id, (sweepDeletions.get(message.author.id) || 0) + 1);
               deletedCount++;
               oldDeleted++;
-              if (oldDeleted % 10 === 0) logger.info(`Deleted ${oldDeleted} older message(s) so far.`);
+              if (oldDeleted % 10 === 0) logger.debug(`Deleted ${oldDeleted} older message(s) so far.`);
             } catch (error) {
               if (error.code === 50021) {
                 logger.warn(`Skipping system message ${message.id}; Discord does not allow deleting it.`);
@@ -237,12 +237,12 @@ async function sweep({ includeOlder = false } = {}) {
           if (oldCursor !== null && newestId <= oldCursor) break;
           oldCursor = newestId + 1n;
         }
-        logger.info(`Deleted ${oldDeleted} older message(s) in this server.`);
+        logger.debug(`Deleted ${oldDeleted} older message(s) in this server.`);
       }
     }
   }
   for (const [author, count] of sweepDeletions) {
-    logger.info(`Sweep total for user ${author}: deleted ${count} message(s).`);
+    logger.debug(`Sweep total for user ${author}: deleted ${count} message(s).`);
   }
   logger.info(`Sweep finished; deleted ${deletedCount} message(s).`);
   return deletedCount;
@@ -253,7 +253,7 @@ async function sweep({ includeOlder = false } = {}) {
     for (const [channelId, channel] of archivedThreads) {
       try {
         await channel.setArchived(true, 'Cleanup finished');
-        logger.info(`Re-archived thread ${channelId} after cleanup.`);
+        logger.debug(`Re-archived thread ${channelId} after cleanup.`);
       } catch (error) {
         logger.error(`Could not re-archive thread ${channelId}`, error);
       }
