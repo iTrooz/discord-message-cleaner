@@ -160,6 +160,7 @@ async function sweep({ includeOlder = false } = {}) {
   const cleanId = nextCleanId++;
   const logger = LOGGER.getSubLogger({ name: `clean/${cleanId}` });
   let deletedCount = 0;
+  const sweepDeletions = new Map();
   const checkedThreads = new Set();
   const archivedThreads = new Map();
   logger.info(`Sweep started${includeOlder ? ' with older-than-14-days mode' : ''}.`);
@@ -192,7 +193,11 @@ async function sweep({ includeOlder = false } = {}) {
             await ensureThreadUnarchived(channel, checkedThreads, archivedThreads, logger);
             if (batch.length === 1) await client.rest.delete(Routes.channelMessage(channel, batch[0]));
             else if (batch.length > 1) await client.rest.post(Routes.channelBulkDelete(channel), { body: { messages: batch } });
-            for (const id of batch) recordDeletion(byId.get(id), guild.id);
+            for (const id of batch) {
+              const author = byId.get(id);
+              recordDeletion(author, guild.id);
+              sweepDeletions.set(author, (sweepDeletions.get(author) || 0) + 1);
+            }
             deletedCount += batch.length;
             logger.info(`Deleted ${batch.length} message(s) from channel ${channel}.`);
           }
@@ -217,11 +222,16 @@ async function sweep({ includeOlder = false } = {}) {
               await ensureThreadUnarchived(message.channel_id, checkedThreads, archivedThreads, logger);
               await client.rest.delete(Routes.channelMessage(message.channel_id, message.id));
               recordDeletion(message.author.id, guild.id);
+              sweepDeletions.set(message.author.id, (sweepDeletions.get(message.author.id) || 0) + 1);
               deletedCount++;
               oldDeleted++;
               if (oldDeleted % 10 === 0) logger.info(`Deleted ${oldDeleted} older message(s) so far.`);
             } catch (error) {
-              logger.error(`Could not delete old message ${message.id}`, error);
+              if (error.code === 50021) {
+                logger.warn(`Skipping system message ${message.id}; Discord does not allow deleting it.`);
+              } else {
+                logger.error(`Could not delete old message ${message.id}`, error);
+              }
             }
           }
           if (oldCursor !== null && newestId <= oldCursor) break;
@@ -230,6 +240,9 @@ async function sweep({ includeOlder = false } = {}) {
         logger.info(`Deleted ${oldDeleted} older message(s) in this server.`);
       }
     }
+  }
+  for (const [author, count] of sweepDeletions) {
+    logger.info(`Sweep total for user ${author}: deleted ${count} message(s).`);
   }
   logger.info(`Sweep finished; deleted ${deletedCount} message(s).`);
   return deletedCount;
