@@ -142,12 +142,13 @@ function recordDeletion(author, guildId) {
 }
 
 // Unarchive a thread before trying to delete messages from it.
-async function ensureThreadUnarchived(channelId, checkedThreads, logger) {
+async function ensureThreadUnarchived(channelId, checkedThreads, archivedThreads, logger) {
   if (checkedThreads.has(channelId)) return;
   const channel = await client.channels.fetch(channelId);
   if (channel?.isThread() && channel.archived) {
     logger.info(`Unarchiving thread ${channelId} before deletion.`);
     await channel.setArchived(false, 'Cleanup registered messages');
+    archivedThreads.set(channelId, channel);
   }
   checkedThreads.add(channelId);
 }
@@ -159,12 +160,13 @@ async function sweep({ includeOlder = false } = {}) {
   const cleanId = nextCleanId++;
   const logger = LOGGER.getSubLogger({ name: `clean/${cleanId}` });
   let deletedCount = 0;
+  const checkedThreads = new Set();
+  const archivedThreads = new Map();
   logger.info(`Sweep started${includeOlder ? ' with older-than-14-days mode' : ''}.`);
   try {
   const now = Date.now(), lower = BigInt(Math.floor((now - 14 * 864e5 - 1420070400000) * 4194304));
   const upper = BigInt(Math.floor((now - 11 * 864e5 - 1420070400000) * 4194304));
   let lastOldDeletion = 0;
-  const checkedThreads = new Set();
   for (const guild of client.guilds.cache.values()) {
     logger.info(`Server ID: ${guild.id}`);
     const users = [...new Set([...(data.local[guild.id] || []), ...data.global])];
@@ -187,7 +189,7 @@ async function sweep({ includeOlder = false } = {}) {
           for (let n = 0; n < eligible.length; n += 100) {
             const batch = eligible.slice(n, n + 100);
             logger.info(`Deleting ${batch.length} message(s) from channel ${channel}.`);
-            await ensureThreadUnarchived(channel, checkedThreads, logger);
+            await ensureThreadUnarchived(channel, checkedThreads, archivedThreads, logger);
             if (batch.length === 1) await client.rest.delete(Routes.channelMessage(channel, batch[0]));
             else if (batch.length > 1) await client.rest.post(Routes.channelBulkDelete(channel), { body: { messages: batch } });
             for (const id of batch) recordDeletion(byId.get(id), guild.id);
@@ -212,7 +214,7 @@ async function sweep({ includeOlder = false } = {}) {
             if (lastOldDeletion && wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
             lastOldDeletion = Date.now();
             try {
-              await ensureThreadUnarchived(message.channel_id, checkedThreads, logger);
+              await ensureThreadUnarchived(message.channel_id, checkedThreads, archivedThreads, logger);
               await client.rest.delete(Routes.channelMessage(message.channel_id, message.id));
               recordDeletion(message.author.id, guild.id);
               deletedCount++;
@@ -234,7 +236,17 @@ async function sweep({ includeOlder = false } = {}) {
   } catch (error) {
     logger.error('Sweep failed', error);
     throw error;
-  } finally { sweeping = false; }
+  } finally {
+    for (const [channelId, channel] of archivedThreads) {
+      try {
+        await channel.setArchived(true, 'Cleanup finished');
+        logger.info(`Re-archived thread ${channelId} after cleanup.`);
+      } catch (error) {
+        logger.error(`Could not re-archive thread ${channelId}`, error);
+      }
+    }
+    sweeping = false;
+  }
 }
 
 let sweeping = false;
